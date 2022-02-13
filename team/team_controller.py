@@ -1,4 +1,3 @@
-from asyncio import start_unix_server
 from concurrent.futures import process
 from sat_controller import SatControllerInterface, sat_msgs
 
