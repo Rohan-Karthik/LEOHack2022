@@ -2,6 +2,7 @@ from concurrent.futures import process
 from sat_controller import SatControllerInterface, sat_msgs
 
 import numpy as np
+import math
 
 # Team code is written as an implementation of various methods
 # within the the generic SatControllerInterface class.
@@ -19,9 +20,9 @@ class TeamController(SatControllerInterface):
 
         self.dt = 0.05  # seconds
 
-        self.kp = 5.0
-        self.ki = 0.0
-        self.kd = 2.0
+        self.kp = 1.5
+        self.ki = 0
+        self.kd = 5
 
         # Example of persistant data
         self.counter = 0
@@ -51,8 +52,12 @@ class TeamController(SatControllerInterface):
         print("Live Sat State:")
         print(satellite_state)
 
+        dead_x = dead_sat_state.pose.x
+        dead_y = dead_sat_state.pose.y
+        dead_theta = dead_sat_state.pose.theta
+
         current_position = np.array([satellite_state.pose.x, satellite_state.pose.y, satellite_state.pose.theta], dtype=float)
-        desired_position = np.array([dead_sat_state.pose.x, dead_sat_state.pose.y, dead_sat_state.pose.theta], dtype=float)
+        desired_position = np.array([dead_x + (0.25 * math.cos(dead_theta - math.pi / 2)), dead_y + (0.25 * math.sin(dead_theta - math.pi / 2)), dead_theta + 0.025], dtype=float)
 
         # Get timedelta from elapsed time
         elapsed_time = system_state.elapsedTime.ToTimedelta()
