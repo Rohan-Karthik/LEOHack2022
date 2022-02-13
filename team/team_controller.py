@@ -1,4 +1,7 @@
+from concurrent.futures import process
 from sat_controller import SatControllerInterface, sat_msgs
+
+import numpy as np
 
 # Team code is written as an implementation of various methods
 # within the the generic SatControllerInterface class.
@@ -12,9 +15,19 @@ class TeamController(SatControllerInterface):
     def team_init(self):
         """ Runs any team based initialization """
         # Run any initialization you need
+        self.max_thrust_force = 0.5  # Newtons
+
+        self.dt = 0.05  # seconds
+
+        self.kp = 5.0
+        self.ki = 0.0
+        self.kd = 2.0
 
         # Example of persistant data
         self.counter = 0
+        self.errors = np.array([0, 0, 0], dtype=float)
+        self.errors_previous = np.array([0, 0, 0], dtype=float)
+        self.errors_integral = np.array([0, 0, 0], dtype=float)
 
         # Example of logging
         self.logger.info("Initialized :)")
@@ -23,8 +36,8 @@ class TeamController(SatControllerInterface):
 
         # Update team info
         team_info = sat_msgs.TeamInfo()
-        team_info.teamName = "Example"
-        team_info.teamID = 1111
+        team_info.teamName = "Team 17"
+        team_info.teamID = 17
 
         # Return team info
         return team_info
@@ -32,7 +45,14 @@ class TeamController(SatControllerInterface):
     def team_run(self, system_state: sat_msgs.SystemState, satellite_state: sat_msgs.SatelliteState, dead_sat_state: sat_msgs.SatelliteState) -> sat_msgs.ControlMessage:
         """ Takes in a system state, satellite state """
 
+        print("Dead Sat State:")
         print(dead_sat_state)
+
+        print("Live Sat State:")
+        print(satellite_state)
+
+        current_position = np.array([satellite_state.pose.x, satellite_state.pose.y, satellite_state.pose.theta], dtype=float)
+        desired_position = np.array([dead_sat_state.pose.x, dead_sat_state.pose.y, dead_sat_state.pose.theta], dtype=float)
 
         # Get timedelta from elapsed time
         elapsed_time = system_state.elapsedTime.ToTimedelta()
@@ -40,16 +60,31 @@ class TeamController(SatControllerInterface):
 
         # Example of persistant data
         self.counter += 1
+        (errors, errors_integral, errors_derivative) = self.error_calc(desired_position, current_position)
 
         # Example of logging
         self.logger.info(f'Counter value: {self.counter}')
+
+        # PID control
+        process_variable = (self.kp * errors) + (self.ki * errors_integral) + (self.kd * errors_derivative)
+        print("Process Variable: ")
+        print(process_variable)
+
+        thrust_force = self.thrust_force_calcs(process_variable)
 
         # Create a thrust command message
         control_message = sat_msgs.ControlMessage()
 
         # Set thrust command values, basic PD controller that drives the sat to [0, -1]
-        control_message.thrust.f_x = -2.0 * (satellite_state.pose.x - (0)) - 3.0 * satellite_state.twist.v_x
-        control_message.thrust.f_y = -2.0 * (satellite_state.pose.y - (-1)) - 3.0 * satellite_state.twist.v_y
+        # control_message.thrust.f_x = -2.0 * (satellite_state.pose.x - (dead_sat_state.pose.x - 0.3)) - 3.0 * satellite_state.twist.v_x
+        # control_message.thrust.f_y = -2.0 * (satellite_state.pose.y - (dead_sat_state.pose.y + 0.05)) - 3.0 * satellite_state.twist.v_y
+        # control_message.thrust.tau = -2.0 * (satellite_state.pose.theta - (dead_sat_state.pose.theta - np.pi)) - 3.0 * satellite_state.twist.omega
+
+        (control_message.thrust.f_x, control_message.thrust.f_y, control_message.thrust.tau) = thrust_force
+        print("Thrust: ")
+        print(thrust_force)
+
+
 
         # Return control message
         return control_message
@@ -57,3 +92,31 @@ class TeamController(SatControllerInterface):
     def team_reset(self) -> None:
         # Run any reset code
         pass
+
+    def error_calc(self, desired_position, current_position):
+        """Calculates the system errors, given the desired and current positions"""
+
+        self.errors = desired_position - current_position
+        self.errors_integral += self.errors * self.dt
+        self.errors_derivative = (self.errors - self.errors_previous) / self.dt
+        self.errors_previous = self.errors
+
+        print("Errors: ")
+        print(self.errors)
+
+
+        return self.errors, self.errors_integral, self.errors_derivative
+    
+    def sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
+    
+    def thrust_force_calcs(self, process_variable):
+
+        thrust_percents = np.ndarray(len(self.errors))
+
+        for variable in range(0, len(thrust_percents)):
+            thrust_percents[variable] = round(self.sigmoid(-variable), 2)
+
+        thrust_force = abs(thrust_percents * self.max_thrust_force)
+
+        return thrust_force
