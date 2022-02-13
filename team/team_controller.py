@@ -1,3 +1,4 @@
+from asyncio import start_unix_server
 from concurrent.futures import process
 from sat_controller import SatControllerInterface, sat_msgs
 
@@ -52,12 +53,22 @@ class TeamController(SatControllerInterface):
         print("Live Sat State:")
         print(satellite_state)
 
+        # sat_velocities = [satellite_state.twist.v_x, satellite_state.twist.v_y, satellite_state.twist.omega]
+
+        # assert all(velocity < 0.05 for velocity in sat_velocities), "Satellite velocity was > 0.05 m/s !" 
+
         dead_x = dead_sat_state.pose.x
         dead_y = dead_sat_state.pose.y
         dead_theta = dead_sat_state.pose.theta
 
-        current_position = np.array([satellite_state.pose.x, satellite_state.pose.y, satellite_state.pose.theta], dtype=float)
-        desired_position = np.array([dead_x + (0.25 * math.cos(dead_theta - math.pi / 2)), dead_y + (0.25 * math.sin(dead_theta - math.pi / 2)), dead_theta + 0.025], dtype=float)
+        sat_x = satellite_state.pose.x
+        sat_y = satellite_state.pose.y
+        sat_theta = satellite_state.pose.theta
+
+        current_position = np.array([sat_x, sat_y, sat_theta], dtype=float)
+        desired_position = np.array([dead_x + (0.25 * math.cos(dead_theta - math.pi / 2)), dead_y + (0.25 * math.sin(dead_theta - math.pi / 2)), dead_theta + math.pi], dtype=float)
+
+        self.update_max_thrust_and_constants(dead_x, dead_y, sat_x, sat_y)
 
         # Get timedelta from elapsed time
         elapsed_time = system_state.elapsedTime.ToTimedelta()
@@ -126,3 +137,19 @@ class TeamController(SatControllerInterface):
         thrust_force = thrust_percents * self.max_thrust_force
 
         return thrust_force
+    
+    def update_max_thrust_and_constants(self, dead_x, dead_y, sat_x, sat_y):
+
+        if (sat_x - dead_x)**2 + (sat_y - dead_y)**2 <= 0.5**2:
+            print("FINAL APPROACH")
+            self.max_thrust_force = 0.25
+            self.kp = 0.2
+            self.ki = 0.0
+            self.kd = 4.5
+        else:
+            self.max_thrust_force = 0.5
+            self.kp = 1.5
+            self.ki = 0.0
+            self.kd = 5.0
+
+        return 
