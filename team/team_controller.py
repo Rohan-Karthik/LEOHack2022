@@ -105,16 +105,19 @@ class TeamController(SatControllerInterface):
 
         return self.errors, self.errors_integral, self.errors_derivative
     
-    def sigmoid(self, x):
-        return 1 / (1 + np.exp(-x))
+    def modified_sigmoid(self, x):
+        return 2.0 * (1.0 / (1.0 + np.exp(-x))) - 1.0
     
     def thrust_force_calcs(self, process_variable):
 
         thrust_percents = np.ndarray(len(self.errors))
 
         for variable in range(0, len(thrust_percents)):
-            thrust_percents[variable] = round(self.sigmoid(-variable), 2)
+            if process_variable[variable] < 1:
+                thrust_percents[variable] = -1.0 * round(self.modified_sigmoid(-process_variable[variable]), 2)
+            elif process_variable[variable] > 1:
+                thrust_percents[variable] = round(self.modified_sigmoid(process_variable[variable]), 2)
 
-        thrust_force = abs(thrust_percents * self.max_thrust_force)
+        thrust_force = thrust_percents * self.max_thrust_force
 
         return thrust_force
