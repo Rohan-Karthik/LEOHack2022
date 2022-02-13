@@ -32,6 +32,7 @@ class TeamController(SatControllerInterface):
         """ Takes in a system state and a satellite state and returns a control message """
 
         print(dead_sat_state)
+        print(live_sat_state)
 
         # Get timedelta from elapsed time
         elapsed_time = system_state.elapsedTime.ToTimedelta()
